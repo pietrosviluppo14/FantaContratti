@@ -1,0 +1,125 @@
+version: '3.8'
+
+services:
+  # API Gateway
+  api-gateway:
+    build:
+      context: ./infrastructure/api-gateway
+      dockerfile: Dockerfile
+    container_name: fantacontratti-api-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - USER_SERVICE_URL=http://user-service:3001
+      - CONTRACT_SERVICE_URL=http://contract-service:3002
+      - NOTIFICATION_SERVICE_URL=http://notification-service:3003
+      - ALLOWED_ORIGINS=http://localhost:3001,http://localhost:3002
+    depends_on:
+      - user-service
+    networks:
+      - fantacontratti-network
+    restart: unless-stopped
+
+  # User Service
+  user-service:
+    build:
+      context: ./services/backend/user-service
+      dockerfile: Dockerfile
+    container_name: fantacontratti-user-service
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DB_HOST=postgres-users
+      - DB_PORT=5432
+      - DB_NAME=fantacontratti_users
+      - DB_USER=postgres
+      - DB_PASSWORD=password
+      - KAFKA_BROKERS=kafka:9092
+      - JWT_SECRET=your-super-secret-jwt-key-change-in-production
+      - JWT_REFRESH_SECRET=your-super-secret-refresh-key-change-in-production
+    depends_on:
+      - postgres-users
+      - kafka
+    networks:
+      - fantacontratti-network
+    restart: unless-stopped
+
+  # User Portal Frontend
+  user-portal:
+    build:
+      context: ./services/frontend/user-portal
+      dockerfile: Dockerfile
+    container_name: fantacontratti-user-portal
+    ports:
+      - "8001:80"
+    depends_on:
+      - api-gateway
+    networks:
+      - fantacontratti-network
+    restart: unless-stopped
+
+  # Database per User Service
+  postgres-users:
+    image: postgres:15-alpine
+    container_name: fantacontratti-postgres-users
+    environment:
+      POSTGRES_DB: fantacontratti_users
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_users_data:/var/lib/postgresql/data
+      - ./infrastructure/databases/users/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - fantacontratti-network
+    restart: unless-stopped
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: fantacontratti-redis
+    volumes:
+      - redis_data:/data
+    networks:
+      - fantacontratti-network
+    restart: unless-stopped
+
+  # Zookeeper
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: fantacontratti-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - fantacontratti-network
+    restart: unless-stopped
+
+  # Kafka
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: fantacontratti-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: true
+    networks:
+      - fantacontratti-network
+    restart: unless-stopped
+
+volumes:
+  postgres_users_data:
+  redis_data:
+
+networks:
+  fantacontratti-network:
+    driver: bridge

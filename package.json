@@ -1,0 +1,55 @@
+{
+  "name": "fantacontratti-platform",
+  "version": "1.0.0",
+  "description": "Piattaforma microservizi per gestione contratti fantasy",
+  "private": true,
+  "workspaces": [
+    "services/backend/*",
+    "services/frontend/*",
+    "infrastructure/api-gateway"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\" \"npm run dev:gateway\"",
+    "dev:backend": "concurrently \"npm run dev -w user-service\" \"npm run dev -w contract-service\" \"npm run dev -w notification-service\"",
+    "dev:frontend": "concurrently \"npm run dev -w user-portal\" \"npm run dev -w admin-dashboard\"",
+    "dev:gateway": "npm run dev -w api-gateway",
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "test:all": "npm run test",
+    "lint": "npm run lint --workspaces",
+    "clean": "npm run clean --workspaces && rm -rf node_modules",
+    "setup": "npm install && npm run setup --workspaces",
+    "docker:dev": "docker-compose -f docker/docker-compose.dev.yml up -d",
+    "docker:prod": "docker-compose -f docker/docker-compose.prod.yml up -d",
+    "docker:down": "docker-compose down",
+    "migrate": "npm run migrate --workspaces",
+    "seed": "npm run seed --workspaces"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.5",
+    "typescript": "^5.3.3",
+    "@types/node": "^20.11.19"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourusername/fantacontratti.git"
+  },
+  "keywords": [
+    "microservices",
+    "fantasy",
+    "contracts",
+    "nodejs",
+    "react",
+    "kafka",
+    "docker"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}

@@ -1,0 +1,173 @@
+name: 📚 Deploy Documentation
+
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'docs/**' ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  # Job 1: Build Documentation
+  build-docs:
+    name: 🏗️ Build Documentation
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📁 Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: 📦 Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18.x'
+        cache: 'npm'
+    
+    - name: 📥 Install dependencies
+      run: |
+        npm ci
+        npm install -g @vuepress/cli vuepress
+    
+    - name: 🏗️ Build VuePress documentation
+      run: |
+        # Crea struttura VuePress
+        mkdir -p docs-site/.vuepress
+        
+        # Configura VuePress
+        cat > docs-site/.vuepress/config.js << 'EOF'
+        module.exports = {
+          title: 'FantaContratti Documentation',
+          description: 'Documentazione completa della piattaforma microservizi FantaContratti',
+          base: '/FantaContratti/',
+          themeConfig: {
+            nav: [
+              { text: 'Home', link: '/' },
+              { text: 'Architecture', link: '/architecture/' },
+              { text: 'API', link: '/api/' },
+              { text: 'Contributing', link: '/contributing/' },
+              { text: 'Deployment', link: '/deployment/' }
+            ],
+            sidebar: {
+              '/': [
+                {
+                  title: 'Getting Started',
+                  children: [
+                    '/',
+                    '/setup/',
+                    '/contributing/'
+                  ]
+                },
+                {
+                  title: 'Architecture',
+                  children: [
+                    '/architecture/',
+                    '/configuration/'
+                  ]
+                },
+                {
+                  title: 'Development',
+                  children: [
+                    '/api/',
+                    '/testing/',
+                    '/debugging/'
+                  ]
+                },
+                {
+                  title: 'Operations',
+                  children: [
+                    '/deployment/',
+                    '/monitoring/',
+                    '/troubleshooting/'
+                  ]
+                }
+              ]
+            },
+            repo: 'username/FantaContratti',
+            docsDir: 'docs',
+            editLinks: true,
+            editLinkText: 'Modifica questa pagina su GitHub'
+          }
+        }
+        EOF
+        
+        # Copia documentazione
+        cp docs/README.md docs-site/README.md
+        cp docs/architecture.md docs-site/architecture.md
+        cp docs/api.md docs-site/api.md
+        cp docs/contributing.md docs-site/contributing.md
+        cp docs/deployment.md docs-site/deployment.md
+        cp docs/configuration.md docs-site/configuration.md
+        
+        # Build VuePress
+        cd docs-site && vuepress build
+    
+    - name: 📤 Upload documentation artifact
+      uses: actions/upload-pages-artifact@v2
+      with:
+        path: docs-site/.vuepress/dist
+
+  # Job 2: Deploy to GitHub Pages
+  deploy-docs:
+    name: 🚀 Deploy to GitHub Pages
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build-docs
+    
+    steps:
+    - name: 🚀 Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v2
+
+  # Job 3: Update API Documentation
+  update-api-docs:
+    name: 📖 Update API Documentation
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.message, '[update-api-docs]')
+    
+    steps:
+    - name: 📁 Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: 📦 Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18.x'
+        cache: 'npm'
+    
+    - name: 📥 Install dependencies
+      run: npm ci
+    
+    - name: 🔄 Start services for documentation generation
+      run: |
+        docker-compose -f docker/docker-compose.infrastructure.yml up -d
+        sleep 30
+    
+    - name: 📖 Generate OpenAPI documentation
+      run: |
+        # Installa swagger-jsdoc e swagger-ui-express globalmente
+        npm install -g swagger-jsdoc swagger-ui-express @apidevtools/swagger-parser
+        
+        # Genera documentazione OpenAPI dai commenti JSDoc
+        node scripts/generate-api-docs.js
+    
+    - name: 📤 Commit updated API docs
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add docs/api/
+        if git diff --staged --quiet; then
+          echo "No changes to API documentation"
+        else
+          git commit -m "🤖 Update API documentation [skip ci]"
+          git push
+        fi

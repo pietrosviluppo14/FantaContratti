@@ -1,0 +1,302 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  NODE_VERSION: '18.x'
+  DOCKER_BUILDKIT: 1
+
+jobs:
+  # Job 1: Linting e Code Quality
+  lint:
+    name: 🔍 Lint & Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📁 Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: 📦 Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+    
+    - name: 📥 Install dependencies
+      run: npm ci
+    
+    - name: 🔍 Run ESLint
+      run: npm run lint
+    
+    - name: 🎨 Check Prettier formatting
+      run: npm run format:check
+    
+    - name: 🔒 Run security audit
+      run: npm audit --audit-level moderate
+
+  # Job 2: Unit & Integration Tests
+  test:
+    name: 🧪 Tests
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_USER: testuser
+          POSTGRES_DB: fantacontratti_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+    - name: 📁 Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: 📦 Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+    
+    - name: 📥 Install dependencies
+      run: npm ci
+    
+    - name: 🔧 Setup test environment
+      run: |
+        cp services/backend/user-service/.env.example services/backend/user-service/.env.test
+        sed -i 's/localhost:5432/localhost:5432/g' services/backend/user-service/.env.test
+        sed -i 's/fantacontratti/fantacontratti_test/g' services/backend/user-service/.env.test
+    
+    - name: 🧪 Run unit tests
+      run: npm run test
+      env:
+        NODE_ENV: test
+        DATABASE_URL: postgresql://testuser:testpassword@localhost:5432/fantacontratti_test
+        REDIS_URL: redis://localhost:6379
+    
+    - name: 🧪 Run integration tests
+      run: npm run test:integration
+      env:
+        NODE_ENV: test
+        DATABASE_URL: postgresql://testuser:testpassword@localhost:5432/fantacontratti_test
+        REDIS_URL: redis://localhost:6379
+    
+    - name: 📊 Generate coverage report
+      run: npm run test:coverage
+    
+    - name: 📤 Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: ./coverage/lcov.info
+        flags: unittests
+        name: codecov-umbrella
+
+  # Job 3: Build Docker Images
+  build:
+    name: 🐳 Build Docker Images
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    
+    steps:
+    - name: 📁 Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: 🐳 Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: 🏗️ Build User Service Image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./services/backend/user-service
+        file: ./services/backend/user-service/Dockerfile
+        push: false
+        tags: fantacontratti/user-service:${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    
+    - name: 🏗️ Build API Gateway Image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./infrastructure/api-gateway
+        file: ./infrastructure/api-gateway/Dockerfile
+        push: false
+        tags: fantacontratti/api-gateway:${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    
+    - name: 🏗️ Build Frontend Image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./services/frontend/user-portal
+        file: ./services/frontend/user-portal/Dockerfile
+        push: false
+        tags: fantacontratti/user-portal:${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    
+    - name: 🔍 Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'fantacontratti/user-service:${{ github.sha }}'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+    
+    - name: 📤 Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  # Job 4: E2E Tests
+  e2e:
+    name: 🎭 E2E Tests
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: 📁 Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: 📦 Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+    
+    - name: 📥 Install dependencies
+      run: npm ci
+    
+    - name: 🐳 Start services with Docker Compose
+      run: |
+        docker-compose -f docker/docker-compose.infrastructure.yml up -d
+        sleep 30 # Wait for services to be ready
+    
+    - name: 🎭 Run Cypress E2E tests
+      uses: cypress-io/github-action@v6
+      with:
+        start: npm run start:e2e
+        wait-on: 'http://localhost:3000'
+        wait-on-timeout: 120
+        browser: chrome
+        record: true
+      env:
+        CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: 📤 Upload E2E artifacts
+      uses: actions/upload-artifact@v3
+      if: failure()
+      with:
+        name: cypress-screenshots
+        path: cypress/screenshots
+        retention-days: 7
+
+  # Job 5: Deploy to Staging (solo su push a develop)
+  deploy-staging:
+    name: 🚀 Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [lint, test, build]
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    environment: staging
+    
+    steps:
+    - name: 📁 Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: 🏗️ Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: eu-west-1
+    
+    - name: 🐳 Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+    
+    - name: 🏗️ Build and push images to ECR
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        # Build and push images
+        docker build -t $ECR_REGISTRY/fantacontratti/user-service:$IMAGE_TAG ./services/backend/user-service
+        docker build -t $ECR_REGISTRY/fantacontratti/api-gateway:$IMAGE_TAG ./infrastructure/api-gateway
+        docker build -t $ECR_REGISTRY/fantacontratti/user-portal:$IMAGE_TAG ./services/frontend/user-portal
+        
+        docker push $ECR_REGISTRY/fantacontratti/user-service:$IMAGE_TAG
+        docker push $ECR_REGISTRY/fantacontratti/api-gateway:$IMAGE_TAG
+        docker push $ECR_REGISTRY/fantacontratti/user-portal:$IMAGE_TAG
+    
+    - name: 🚀 Deploy to EKS
+      run: |
+        aws eks update-kubeconfig --region eu-west-1 --name fantacontratti-staging
+        kubectl set image deployment/user-service user-service=${{ steps.login-ecr.outputs.registry }}/fantacontratti/user-service:${{ github.sha }}
+        kubectl set image deployment/api-gateway api-gateway=${{ steps.login-ecr.outputs.registry }}/fantacontratti/api-gateway:${{ github.sha }}
+        kubectl set image deployment/user-portal user-portal=${{ steps.login-ecr.outputs.registry }}/fantacontratti/user-portal:${{ github.sha }}
+        kubectl rollout status deployment/user-service
+        kubectl rollout status deployment/api-gateway
+        kubectl rollout status deployment/user-portal
+
+  # Job 6: Release (solo su push a main)
+  release:
+    name: 📦 Create Release
+    runs-on: ubuntu-latest
+    needs: [lint, test, build, e2e]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - name: 📁 Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: 📦 Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+    
+    - name: 📥 Install dependencies
+      run: npm ci
+    
+    - name: 🏷️ Create release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        npm run release
+    
+    - name: 📤 Upload release artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: release-assets
+        path: |
+          dist/
+          docker-compose.prod.yml
+        retention-days: 30

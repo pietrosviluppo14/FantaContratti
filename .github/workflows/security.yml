@@ -1,0 +1,174 @@
+name: 🔒 Security Scan
+
+on:
+  schedule:
+    # Esegui ogni lunedì alle 9:00 UTC
+    - cron: '0 9 * * 1'
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # Job 1: Dependency Security Scan
+  dependency-scan:
+    name: 📦 Dependency Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📁 Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: 📦 Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18.x'
+        cache: 'npm'
+    
+    - name: 📥 Install dependencies
+      run: npm ci
+    
+    - name: 🔍 Run npm audit
+      run: npm audit --audit-level moderate
+    
+    - name: 🔒 Run Snyk to check for vulnerabilities
+      uses: snyk/actions/node@master
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      with:
+        args: --severity-threshold=medium
+    
+    - name: 📤 Upload Snyk results to GitHub Code Scanning
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: snyk.sarif
+
+  # Job 2: Code Security Analysis
+  code-security:
+    name: 🔍 Code Security Analysis
+    runs-on: ubuntu-latest
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'javascript', 'typescript' ]
+    
+    steps:
+    - name: 📁 Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: 🔧 Initialize CodeQL
+      uses: github/codeql-action/init@v2
+      with:
+        languages: ${{ matrix.language }}
+        queries: security-extended,security-and-quality
+    
+    - name: 🏗️ Autobuild
+      uses: github/codeql-action/autobuild@v2
+    
+    - name: 🔍 Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
+
+  # Job 3: Docker Image Security Scan
+  docker-security:
+    name: 🐳 Docker Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📁 Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: 🐳 Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: 🏗️ Build Docker images
+      run: |
+        docker build -t fantacontratti/user-service:security-scan ./services/backend/user-service
+        docker build -t fantacontratti/api-gateway:security-scan ./infrastructure/api-gateway
+        docker build -t fantacontratti/user-portal:security-scan ./services/frontend/user-portal
+    
+    - name: 🔍 Run Trivy vulnerability scanner - User Service
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'fantacontratti/user-service:security-scan'
+        format: 'sarif'
+        output: 'trivy-user-service.sarif'
+    
+    - name: 🔍 Run Trivy vulnerability scanner - API Gateway
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'fantacontratti/api-gateway:security-scan'
+        format: 'sarif'
+        output: 'trivy-api-gateway.sarif'
+    
+    - name: 🔍 Run Trivy vulnerability scanner - User Portal
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'fantacontratti/user-portal:security-scan'
+        format: 'sarif'
+        output: 'trivy-user-portal.sarif'
+    
+    - name: 📤 Upload Trivy scan results - User Service
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-user-service.sarif'
+        category: 'trivy-user-service'
+    
+    - name: 📤 Upload Trivy scan results - API Gateway
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-api-gateway.sarif'
+        category: 'trivy-api-gateway'
+    
+    - name: 📤 Upload Trivy scan results - User Portal
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-user-portal.sarif'
+        category: 'trivy-user-portal'
+
+  # Job 4: Infrastructure Security Scan
+  infrastructure-security:
+    name: 🏗️ Infrastructure Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📁 Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: 🔍 Run Checkov
+      id: checkov
+      uses: bridgecrewio/checkov-action@master
+      with:
+        directory: .
+        framework: dockerfile,docker_compose,kubernetes
+        output_format: sarif
+        output_file_path: checkov.sarif
+    
+    - name: 📤 Upload Checkov scan results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: checkov.sarif
+
+  # Job 5: Secrets Detection
+  secrets-detection:
+    name: 🔐 Secrets Detection
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📁 Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: 🔐 Run TruffleHog
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./
+        base: main
+        head: HEAD
+        extra_args: --debug --only-verified
