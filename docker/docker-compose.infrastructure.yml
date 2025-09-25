@@ -13,7 +13,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_users_data:/var/lib/postgresql/data
-      - ./databases/users/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ../infrastructure/databases/users/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - fantacontratti-network
 
@@ -29,7 +29,7 @@ services:
       - "5433:5432"
     volumes:
       - postgres_contracts_data:/var/lib/postgresql/data
-      - ./databases/contracts/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ../infrastructure/databases/contracts/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - fantacontratti-network
 

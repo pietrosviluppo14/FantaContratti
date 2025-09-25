@@ -10,7 +10,7 @@ import winston from 'winston';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 4000;
 
 // Logger setup
 const logger = winston.createLogger({
@@ -57,20 +57,12 @@ app.get('/health', (req, res) => {
 // Service routes configuration
 const services = {
   '/api/users': {
-    target: process.env.USER_SERVICE_URL || 'http://localhost:3001',
+    target: process.env.USER_SERVICE_URL || 'http://localhost:3002',
     pathRewrite: { '^/api/users': '/api/users' }
   },
   '/api/auth': {
-    target: process.env.USER_SERVICE_URL || 'http://localhost:3001',
+    target: process.env.USER_SERVICE_URL || 'http://localhost:3002',
     pathRewrite: { '^/api/auth': '/api/auth' }
-  },
-  '/api/contracts': {
-    target: process.env.CONTRACT_SERVICE_URL || 'http://localhost:3002',
-    pathRewrite: { '^/api/contracts': '/api/contracts' }
-  },
-  '/api/notifications': {
-    target: process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3003',
-    pathRewrite: { '^/api/notifications': '/api/notifications' }
   }
 };
 
@@ -105,7 +97,7 @@ app.listen(PORT, () => {
   logger.info(`API Gateway running on port ${PORT}`);
   logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
   logger.info('Available routes:');
-  Object.keys(services).forEach(route => {
-    logger.info(`  ${route} -> ${services[route].target}`);
+  Object.entries(services).forEach(([route, config]) => {
+    logger.info(`  ${route} -> ${config.target}`);
   });
 });

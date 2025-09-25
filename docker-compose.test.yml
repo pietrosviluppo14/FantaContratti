@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  postgres-users:
+    image: postgres:13
+    restart: always
+    environment:
+      POSTGRES_DB: fantacontratti_users
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password123
+      POSTGRES_HOST_AUTH_METHOD: md5
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./infrastructure/databases/users/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres_users_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-contracts:
+    image: postgres:13
+    restart: always
+    environment:
+      POSTGRES_DB: fantacontratti_contracts
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password123
+      POSTGRES_HOST_AUTH_METHOD: md5
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./infrastructure/databases/contracts/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres_contracts_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_users_data:
+  postgres_contracts_data:

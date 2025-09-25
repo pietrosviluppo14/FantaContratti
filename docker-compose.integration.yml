@@ -1,0 +1,162 @@
+version: '3.8'
+
+services:
+  # Database Services
+  postgres-users:
+    image: postgres:13
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: fantacontratti_users
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password123
+    volumes:
+      - ./infrastructure/databases/users/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres_users_data:/var/lib/postgresql/data
+    networks:
+      - fantacontratti_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-contracts:
+    image: postgres:13
+    restart: always
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: fantacontratti_contracts
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password123
+    volumes:
+      - ./infrastructure/databases/contracts/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres_contracts_data:/var/lib/postgresql/data
+    networks:
+      - fantacontratti_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    networks:
+      - fantacontratti_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Message Broker
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - fantacontratti_network
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: true
+    networks:
+      - fantacontratti_network
+    volumes:
+      - ./infrastructure/kafka/create-topics.sh:/opt/create-topics.sh
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Backend Services
+  user-service:
+    build:
+      context: ./services/backend/user-service
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      NODE_ENV: production
+      DB_HOST: postgres-users
+      DB_PORT: 5432
+      DB_NAME: fantacontratti_users
+      DB_USER: postgres
+      DB_PASSWORD: password123
+      KAFKA_BROKERS: kafka:9092
+      JWT_SECRET: your-jwt-secret-key
+      JWT_REFRESH_SECRET: your-refresh-secret-key
+      JWT_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 7d
+    depends_on:
+      postgres-users:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - fantacontratti_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: ./infrastructure/api-gateway
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV: production
+      USER_SERVICE_URL: http://user-service:3001
+      CONTRACT_SERVICE_URL: http://contract-service:3002
+      NOTIFICATION_SERVICE_URL: http://notification-service:3003
+    depends_on:
+      user-service:
+        condition: service_healthy
+    networks:
+      - fantacontratti_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Frontend
+  user-portal:
+    build:
+      context: ./services/frontend/user-portal
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "5173:80"
+    environment:
+      VITE_API_BASE_URL: http://localhost:4000
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    networks:
+      - fantacontratti_network
+
+networks:
+  fantacontratti_network:
+    driver: bridge
+
+volumes:
+  postgres_users_data:
+  postgres_contracts_data:

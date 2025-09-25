@@ -4,15 +4,20 @@ import { getPool } from '../database/connection';
 import { createError } from '../middleware/errorHandler';
 import logger from '../utils/logger';
 
-export const getAllUsers = async (req: Request, res: Response): Promise<void> => {
-  const pool = getPool();
-  const result = await pool.query('SELECT id, email, username, created_at FROM users ORDER BY created_at DESC');
-  
-  res.json({
-    success: true,
-    data: result.rows,
-    total: result.rowCount
-  });
+export const getAllUsers = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const pool = getPool();
+    const result = await pool.query('SELECT id, email, username, created_at FROM users ORDER BY created_at DESC');
+    
+    res.json({
+      success: true,
+      data: result.rows,
+      total: result.rowCount
+    });
+  } catch (error) {
+    logger.error('Get all users error:', error);
+    throw error;
+  }
 };
 
 export const getUserById = async (req: Request, res: Response): Promise<void> => {
@@ -32,35 +37,42 @@ export const getUserById = async (req: Request, res: Response): Promise<void> =>
 };
 
 export const createUser = async (req: Request, res: Response): Promise<void> => {
-  const { email, username, password } = req.body;
-  const pool = getPool();
-  
-  // Check if user already exists
-  const existingUser = await pool.query('SELECT id FROM users WHERE email = $1 OR username = $2', [email, username]);
-  
-  if (existingUser.rowCount > 0) {
-    throw createError('User already exists with this email or username', 400);
+  try {
+    const { email, username, password } = req.body;
+    const pool = getPool();
+    
+    // Check if user already exists
+    const existingUser = await pool.query('SELECT id FROM users WHERE email = $1 OR username = $2', [email, username]);
+    
+    if (existingUser.rowCount && existingUser.rowCount > 0) {
+      throw createError('User already exists with this email or username', 400);
+    }
+    
+    const result = await pool.query(
+      'INSERT INTO users (email, username, password_hash) VALUES ($1, $2, $3) RETURNING id, email, username, created_at',
+      [email, username, password] // In produzione, hashare la password!
+    );
+    
+    const newUser = result.rows[0];
+    
+    // Publish event to Kafka
+    await publishEvent('user-events', {
+      type: 'USER_CREATED',
+      userId: newUser.id,
+      data: { email, username },
+      timestamp: new Date().toISOString()
+    });
+    
+    logger.info(`New user created: ${email}`);
+    
+    res.status(201).json({
+      success: true,
+      data: newUser
+    });
+  } catch (error) {
+    logger.error('Create user error:', error);
+    throw error;
   }
-  
-  const result = await pool.query(
-    'INSERT INTO users (email, username, password_hash) VALUES ($1, $2, $3) RETURNING id, email, username, created_at',
-    [email, username, password] // In produzione, hashare la password!
-  );
-  
-  const newUser = result.rows[0];
-  
-  // Publish event to Kafka
-  await publishEvent('user-events', {
-    type: 'USER_CREATED',
-    userId: newUser.id,
-    data: { email, username },
-    timestamp: new Date().toISOString()
-  });
-  
-  res.status(201).json({
-    success: true,
-    data: newUser
-  });
 };
 
 export const updateUser = async (req: Request, res: Response): Promise<void> => {
@@ -116,12 +128,22 @@ export const deleteUser = async (req: Request, res: Response): Promise<void> => 
   });
 };
 
-export const getUserProfile = async (req: Request, res: Response): Promise<void> => {
-  // Implementation for user profile
-  res.json({ success: true, data: { message: 'Profile endpoint' } });
+export const getUserProfile = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    // Implementation for user profile
+    res.json({ success: true, data: { message: 'Profile endpoint' } });
+  } catch (error) {
+    logger.error('Get user profile error:', error);
+    throw error;
+  }
 };
 
-export const updateUserProfile = async (req: Request, res: Response): Promise<void> => {
-  // Implementation for profile update
-  res.json({ success: true, data: { message: 'Profile updated' } });
+export const updateUserProfile = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    // Implementation for profile update
+    res.json({ success: true, data: { message: 'Profile updated' } });
+  } catch (error) {
+    logger.error('Update user profile error:', error);
+    throw error;
+  }
 };

@@ -10,8 +10,8 @@
   ],
   "scripts": {
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\" \"npm run dev:gateway\"",
-    "dev:backend": "concurrently \"npm run dev -w user-service\" \"npm run dev -w contract-service\" \"npm run dev -w notification-service\"",
-    "dev:frontend": "concurrently \"npm run dev -w user-portal\" \"npm run dev -w admin-dashboard\"",
+    "dev:backend": "npm run dev -w user-service",
+    "dev:frontend": "npm run dev -w user-portal",
     "dev:gateway": "npm run dev -w api-gateway",
     "build": "npm run build --workspaces",
     "test": "npm run test --workspaces",
@@ -26,12 +26,17 @@
     "seed": "npm run seed --workspaces"
   },
   "devDependencies": {
+    "@types/node": "^20.11.19",
+    "@typescript-eslint/eslint-plugin": "^8.44.0",
+    "@typescript-eslint/parser": "^8.44.0",
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
     "eslint": "^8.57.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
     "prettier": "^3.2.5",
-    "typescript": "^5.3.3",
-    "@types/node": "^20.11.19"
+    "typescript": "^5.3.3"
   },
   "engines": {
     "node": ">=18.0.0",

@@ -1,0 +1,11 @@
+# Dockerfile per PostgreSQL con configurazione TDD
+FROM postgres:15-alpine
+
+# Copia script di configurazione personalizzato
+COPY pg_hba_simple.conf /tmp/pg_hba_simple.conf
+
+# Script per configurare l'autenticazione alla prima esecuzione
+RUN echo '#!/bin/bash' > /docker-entrypoint-initdb.d/00-setup-auth.sh && \
+    echo 'cp /tmp/pg_hba_simple.conf /var/lib/postgresql/data/pg_hba.conf' >> /docker-entrypoint-initdb.d/00-setup-auth.sh && \
+    echo 'chmod 600 /var/lib/postgresql/data/pg_hba.conf' >> /docker-entrypoint-initdb.d/00-setup-auth.sh && \
+    chmod +x /docker-entrypoint-initdb.d/00-setup-auth.sh

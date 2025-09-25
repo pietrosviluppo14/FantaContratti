@@ -17,7 +17,7 @@ export const errorHandler = (
   err: AppError,
   req: Request,
   res: Response,
-  next: NextFunction
+  _next: NextFunction
 ): void => {
   const { statusCode = 500, message } = err;
 
@@ -41,7 +41,7 @@ export const errorHandler = (
 
 export const notFoundHandler = (
   req: Request,
-  res: Response,
+  _res: Response,
   next: NextFunction
 ): void => {
   const error = createError(`Route ${req.originalUrl} not found`, 404);

@@ -7,7 +7,7 @@ import { validateUserCreation, validateUserUpdate } from '../middleware/validati
 const router = Router();
 
 // Public routes
-router.get('/health', (req, res) => {
+router.get('/health', (_req, res) => {
   res.json({ status: 'healthy', service: 'user-service' });
 });
 
