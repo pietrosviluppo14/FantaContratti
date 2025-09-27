@@ -12,7 +12,7 @@ const connectionConfig = {
   port: 5432,
   database: 'fantacontratti_users',
   user: 'postgres', 
-  password: 'password123',  // Password hardcoded per test
+  password: 'password123',  // Password corretta dal docker-compose
   connectTimeoutMS: 30000,
   idleTimeoutMillis: 10000
 };

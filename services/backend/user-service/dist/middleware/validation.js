@@ -1,68 +1,54 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.validateResetPassword = exports.validateForgotPassword = exports.validateRegisterUser = exports.validateLoginUser = exports.validateUserUpdate = exports.validateUserCreation = void 0;
-const validateUserCreation = (req, res, next) => {
-    const { email, username, password } = req.body;
-    if (!email || !username || !password) {
-        res.status(400).json({
-            success: false,
-            message: 'Email, username, and password are required'
-        });
-        return;
+exports.validateLogin = exports.validateRegister = void 0;
+const errorHandler_1 = require("./errorHandler");
+const isValidEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+};
+const isValidPassword = (password) => {
+    return typeof password === 'string' && password.length >= 6;
+};
+const isValidUsername = (username) => {
+    const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/;
+    return usernameRegex.test(username);
+};
+const validateRegister = (req, _res, next) => {
+    try {
+        const { email, username, password } = req.body;
+        if (!email || !username || !password) {
+            throw (0, errorHandler_1.createError)('All fields are required: email, username, password', 400);
+        }
+        if (!isValidEmail(email)) {
+            throw (0, errorHandler_1.createError)('Please provide a valid email address', 400);
+        }
+        if (!isValidUsername(username)) {
+            throw (0, errorHandler_1.createError)('Username must be 3-20 characters and contain only letters, numbers, and underscores', 400);
+        }
+        if (!isValidPassword(password)) {
+            throw (0, errorHandler_1.createError)('Password must be at least 6 characters long', 400);
+        }
+        next();
     }
-    next();
-};
-exports.validateUserCreation = validateUserCreation;
-const validateUserUpdate = (_req, _res, next) => {
-    next();
-};
-exports.validateUserUpdate = validateUserUpdate;
-const validateLoginUser = (req, res, next) => {
-    const { email, password } = req.body;
-    if (!email || !password) {
-        res.status(400).json({
-            success: false,
-            message: 'Email and password are required'
-        });
-        return;
+    catch (error) {
+        next(error);
     }
-    next();
 };
-exports.validateLoginUser = validateLoginUser;
-const validateRegisterUser = (req, res, next) => {
-    const { email, username, password } = req.body;
-    if (!email || !username || !password) {
-        res.status(400).json({
-            success: false,
-            message: 'Email, username, and password are required'
-        });
-        return;
+exports.validateRegister = validateRegister;
+const validateLogin = (req, _res, next) => {
+    try {
+        const { email, password } = req.body;
+        if (!email || !password) {
+            throw (0, errorHandler_1.createError)('Email and password are required', 400);
+        }
+        if (!isValidEmail(email)) {
+            throw (0, errorHandler_1.createError)('Please provide a valid email address', 400);
+        }
+        next();
     }
-    next();
-};
-exports.validateRegisterUser = validateRegisterUser;
-const validateForgotPassword = (req, res, next) => {
-    const { email } = req.body;
-    if (!email) {
-        res.status(400).json({
-            success: false,
-            message: 'Email is required'
-        });
-        return;
+    catch (error) {
+        next(error);
     }
-    next();
 };
-exports.validateForgotPassword = validateForgotPassword;
-const validateResetPassword = (req, res, next) => {
-    const { token, password } = req.body;
-    if (!token || !password) {
-        res.status(400).json({
-            success: false,
-            message: 'Token and password are required'
-        });
-        return;
-    }
-    next();
-};
-exports.validateResetPassword = validateResetPassword;
+exports.validateLogin = validateLogin;
 //# sourceMappingURL=validation.js.map

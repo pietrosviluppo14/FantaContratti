@@ -1,80 +1,77 @@
-/**
- * Validation middleware
- */
 import { Request, Response, NextFunction } from 'express';
+import { createError } from './errorHandler';
 
-export const validateUserCreation = (req: Request, res: Response, next: NextFunction): void => {
-  // Basic validation for user creation
-  const { email, username, password } = req.body;
-  
-  if (!email || !username || !password) {
-    res.status(400).json({
-      success: false,
-      message: 'Email, username, and password are required'
-    });
-    return;
-  }
-  
-  next();
+// Utility function per validare email
+const isValidEmail = (email: string): boolean => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
 };
 
-export const validateUserUpdate = (_req: Request, _res: Response, next: NextFunction): void => {
-  // Basic validation for user update
-  next();
+// Utility function per validare password
+const isValidPassword = (password: string): boolean => {
+  return typeof password === 'string' && password.length >= 6;
 };
 
-export const validateLoginUser = (req: Request, res: Response, next: NextFunction): void => {
-  const { email, password } = req.body;
-  
-  if (!email || !password) {
-    res.status(400).json({
-      success: false,
-      message: 'Email and password are required'
-    });
-    return;
-  }
-  
-  next();
+// Utility function per validare username
+const isValidUsername = (username: string): boolean => {
+  const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/;
+  return usernameRegex.test(username);
 };
 
-export const validateRegisterUser = (req: Request, res: Response, next: NextFunction): void => {
-  const { email, username, password } = req.body;
-  
-  if (!email || !username || !password) {
-    res.status(400).json({
-      success: false,
-      message: 'Email, username, and password are required'
-    });
-    return;
+/**
+ * Middleware di validazione per la registrazione
+ */
+export const validateRegister = (req: Request, _res: Response, next: NextFunction): void => {
+  try {
+    const { email, username, password } = req.body;
+
+    // Verifica che tutti i campi richiesti siano presenti
+    if (!email || !username || !password) {
+      throw createError('All fields are required: email, username, password', 400);
+    }
+
+    // Validazione email
+    if (!isValidEmail(email)) {
+      throw createError('Please provide a valid email address', 400);
+    }
+
+    // Validazione username
+    if (!isValidUsername(username)) {
+      throw createError('Username must be 3-20 characters and contain only letters, numbers, and underscores', 400);
+    }
+
+    // Validazione password
+    if (!isValidPassword(password)) {
+      throw createError('Password must be at least 6 characters long', 400);
+    }
+
+    // Se arriva qui, la validazione è passata
+    next();
+  } catch (error) {
+    next(error);
   }
-  
-  next();
 };
 
-export const validateForgotPassword = (req: Request, res: Response, next: NextFunction): void => {
-  const { email } = req.body;
-  
-  if (!email) {
-    res.status(400).json({
-      success: false,
-      message: 'Email is required'
-    });
-    return;
-  }
-  
-  next();
-};
+/**
+ * Middleware di validazione per il login
+ */
+export const validateLogin = (req: Request, _res: Response, next: NextFunction): void => {
+  try {
+    const { email, password } = req.body;
 
-export const validateResetPassword = (req: Request, res: Response, next: NextFunction): void => {
-  const { token, password } = req.body;
-  
-  if (!token || !password) {
-    res.status(400).json({
-      success: false,
-      message: 'Token and password are required'
-    });
-    return;
+    // Verifica che tutti i campi richiesti siano presenti
+    if (!email || !password) {
+      throw createError('Email and password are required', 400);
+    }
+
+    // Validazione email
+    if (!isValidEmail(email)) {
+      throw createError('Please provide a valid email address', 400);
+    }
+
+    // Se arriva qui, la validazione è passata
+    next();
+  } catch (error) {
+    next(error);
   }
-  
-  next();
 };

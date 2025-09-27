@@ -11,14 +11,47 @@ let producer;
 let consumer;
 const initializeKafka = async () => {
     try {
+        const brokers = process.env.KAFKA_BROKERS?.split(',') || ['localhost:9092'];
+        logger_1.default.info('Initializing Kafka with brokers:', brokers);
         kafka = new kafkajs_1.Kafka({
             clientId: 'user-service',
-            brokers: process.env.KAFKA_BROKERS?.split(',') || ['localhost:9092'],
+            brokers: brokers,
+            connectionTimeout: 10000,
+            requestTimeout: 30000,
+            retry: {
+                initialRetryTime: 100,
+                retries: 8
+            }
         });
-        producer = kafka.producer();
-        consumer = kafka.consumer({ groupId: 'user-service-group' });
-        await producer.connect();
-        await consumer.connect();
+        producer = kafka.producer({
+            retry: {
+                initialRetryTime: 100,
+                retries: 3
+            }
+        });
+        consumer = kafka.consumer({
+            groupId: 'user-service-group',
+            retry: {
+                initialRetryTime: 100,
+                retries: 3
+            }
+        });
+        let retries = 3;
+        while (retries > 0) {
+            try {
+                await producer.connect();
+                await consumer.connect();
+                break;
+            }
+            catch (error) {
+                retries--;
+                if (retries === 0) {
+                    throw error;
+                }
+                logger_1.default.info(`Kafka connection failed, retrying... (${retries} attempts left)`);
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+        }
         await consumer.subscribe({ topic: 'user-events' });
         logger_1.default.info('Kafka initialized successfully');
     }

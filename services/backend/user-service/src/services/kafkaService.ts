@@ -7,16 +7,50 @@ let consumer: Consumer;
 
 export const initializeKafka = async (): Promise<void> => {
   try {
+    const brokers = process.env.KAFKA_BROKERS?.split(',') || ['localhost:9092'];
+    logger.info('Initializing Kafka with brokers:', brokers);
+    
     kafka = new Kafka({
       clientId: 'user-service',
-      brokers: process.env.KAFKA_BROKERS?.split(',') || ['localhost:9092'],
+      brokers: brokers,
+      connectionTimeout: 10000,
+      requestTimeout: 30000,
+      retry: {
+        initialRetryTime: 100,
+        retries: 8
+      }
     });
 
-    producer = kafka.producer();
-    consumer = kafka.consumer({ groupId: 'user-service-group' });
+    producer = kafka.producer({
+      retry: {
+        initialRetryTime: 100,
+        retries: 3
+      }
+    });
+    consumer = kafka.consumer({ 
+      groupId: 'user-service-group',
+      retry: {
+        initialRetryTime: 100,
+        retries: 3
+      }
+    });
 
-    await producer.connect();
-    await consumer.connect();
+    // Enhanced connection with retry logic
+    let retries = 3;
+    while (retries > 0) {
+      try {
+        await producer.connect();
+        await consumer.connect();
+        break;
+      } catch (error) {
+        retries--;
+        if (retries === 0) {
+          throw error;
+        }
+        logger.info(`Kafka connection failed, retrying... (${retries} attempts left)`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
 
     // Subscribe to topics
     await consumer.subscribe({ topic: 'user-events' });

@@ -57,12 +57,20 @@ app.get('/health', (req, res) => {
 // Service routes configuration
 const services = {
   '/api/users': {
-    target: process.env.USER_SERVICE_URL || 'http://localhost:3002',
+    target: process.env.USER_SERVICE_URL || 'http://localhost:3001',
     pathRewrite: { '^/api/users': '/api/users' }
   },
   '/api/auth': {
-    target: process.env.USER_SERVICE_URL || 'http://localhost:3002',
+    target: process.env.USER_SERVICE_URL || 'http://localhost:3001',
     pathRewrite: { '^/api/auth': '/api/auth' }
+  },
+  '/api/contracts': {
+    target: process.env.CONTRACT_SERVICE_URL || 'http://localhost:3002',
+    pathRewrite: { '^/api/contracts': '/api/contracts' }
+  },
+  '/api/notifications': {
+    target: process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3003',
+    pathRewrite: { '^/api/notifications': '/api/notifications' }
   }
 };
 
@@ -81,6 +89,19 @@ Object.entries(services).forEach(([path, config]) => {
     },
     onProxyReq: (proxyReq, req, res) => {
       logger.info(`Proxying ${req.method} ${req.originalUrl} to ${config.target}`);
+      
+      // Fix per gestire correttamente i body JSON
+      if (req.body && (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH')) {
+        const bodyData = JSON.stringify(req.body);
+        proxyReq.setHeader('Content-Type', 'application/json');
+        proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+        proxyReq.write(bodyData);
+        proxyReq.end(); // IMPORTANTE: chiudere il stream
+        logger.info(`Body data sent: ${bodyData}`);
+      }
+    },
+    onProxyRes: (proxyRes, req, res) => {
+      logger.info(`Proxy response: ${proxyRes.statusCode} for ${req.method} ${req.originalUrl}`);
     }
   }));
 });

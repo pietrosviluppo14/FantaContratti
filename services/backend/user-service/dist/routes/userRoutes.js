@@ -37,7 +37,6 @@ const express_1 = require("express");
 const errorHandler_1 = require("../middleware/errorHandler");
 const userController = __importStar(require("../controllers/userController"));
 const auth_1 = require("../middleware/auth");
-const validation_1 = require("../middleware/validation");
 const router = (0, express_1.Router)();
 router.get('/health', (_req, res) => {
     res.json({ status: 'healthy', service: 'user-service' });
@@ -45,8 +44,8 @@ router.get('/health', (_req, res) => {
 router.use(auth_1.authenticateToken);
 router.get('/', (0, errorHandler_1.asyncHandler)(userController.getAllUsers));
 router.get('/:id', (0, errorHandler_1.asyncHandler)(userController.getUserById));
-router.post('/', validation_1.validateUserCreation, (0, errorHandler_1.asyncHandler)(userController.createUser));
-router.put('/:id', validation_1.validateUserUpdate, (0, errorHandler_1.asyncHandler)(userController.updateUser));
+router.post('/', (0, errorHandler_1.asyncHandler)(userController.createUser));
+router.put('/:id', (0, errorHandler_1.asyncHandler)(userController.updateUser));
 router.delete('/:id', (0, errorHandler_1.asyncHandler)(userController.deleteUser));
 router.get('/:id/profile', (0, errorHandler_1.asyncHandler)(userController.getUserProfile));
 router.put('/:id/profile', (0, errorHandler_1.asyncHandler)(userController.updateUserProfile));

@@ -34,15 +34,13 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
-const errorHandler_js_1 = require("../middleware/errorHandler.js");
-const authController = __importStar(require("../controllers/authController.js"));
-const validation_js_1 = require("../middleware/validation.js");
+const errorHandler_1 = require("../middleware/errorHandler");
+const authController = __importStar(require("../controllers/authController"));
+const validation_1 = require("../middleware/validation");
 const router = (0, express_1.Router)();
-router.post('/register', validation_js_1.validateRegisterUser, (0, errorHandler_js_1.asyncHandler)(authController.register));
-router.post('/login', validation_js_1.validateLoginUser, (0, errorHandler_js_1.asyncHandler)(authController.login));
-router.post('/logout', (0, errorHandler_js_1.asyncHandler)(authController.logout));
-router.post('/refresh', (0, errorHandler_js_1.asyncHandler)(authController.refreshToken));
-router.post('/forgot-password', validation_js_1.validateForgotPassword, (0, errorHandler_js_1.asyncHandler)(authController.forgotPassword));
-router.post('/reset-password', validation_js_1.validateResetPassword, (0, errorHandler_js_1.asyncHandler)(authController.resetPassword));
+router.post('/register', validation_1.validateRegister, (0, errorHandler_1.asyncHandler)(authController.register));
+router.post('/login', validation_1.validateLogin, (0, errorHandler_1.asyncHandler)(authController.login));
+router.post('/logout', (0, errorHandler_1.asyncHandler)(authController.logout));
+router.post('/refresh', (0, errorHandler_1.asyncHandler)(authController.refreshToken));
 exports.default = router;
 //# sourceMappingURL=authRoutes.js.map

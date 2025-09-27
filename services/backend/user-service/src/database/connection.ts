@@ -24,9 +24,13 @@ export const connectDatabase = async (): Promise<void> => {
       port: parseInt(process.env.DB_PORT || '5432'),
       max: 20,
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 10000, // Increased for Docker networking
+      connectionTimeoutMillis: 15000, // Increased for Docker networking
+      query_timeout: 10000,
       // Enhanced SSL and connection settings
       ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+      // Add keepalive for Docker networking
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 0,
     };
 
     // Configure based on environment
@@ -65,21 +69,25 @@ export const connectDatabase = async (): Promise<void> => {
 
     pool = new Pool(dbConfig);
 
-    // Test the connection with retry logic
-    let retries = 3;
+    // Test the connection with enhanced retry logic
+    let retries = 5;
     while (retries > 0) {
       try {
         const client = await pool.connect();
         await client.query('SELECT NOW()');
         client.release();
+        logger.info(`Database connection successful on attempt ${6 - retries}`);
         break;
       } catch (error) {
         retries--;
         if (retries === 0) {
+          logger.error('All database connection attempts failed. Last error:', error);
           throw error;
         }
-        logger.info(`Database connection failed, retrying... (${retries} attempts left)`);
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        logger.info(`Database connection failed, retrying... (${retries} attempts left)`, {
+          error: error instanceof Error ? error.message : error
+        });
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Increased delay
       }
     }
     

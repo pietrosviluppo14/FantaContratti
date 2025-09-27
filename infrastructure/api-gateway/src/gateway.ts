@@ -33,9 +33,26 @@ export function createApiGateway() {
   });
   app.use(limiter);
 
-  // Body parsing
-  app.use(express.json({ limit: '10mb' }));
+  // Body parsing with error handling
+  app.use(express.json({ 
+    limit: '10mb',
+    verify: (req: any, res: express.Response, buf: Buffer) => {
+      req.rawBody = buf;
+    }
+  }));
   app.use(express.urlencoded({ extended: true }));
+
+  // JSON parsing error handler
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (err instanceof SyntaxError && 'body' in err) {
+      console.error('JSON parsing error:', err.message);
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Invalid JSON format in request body'
+      });
+    }
+    next(err);
+  });
 
   // Health check endpoint
   app.get('/health', (req, res) => {
@@ -54,9 +71,32 @@ export function createApiGateway() {
     target: userServiceUrl,
     changeOrigin: true,
     pathRewrite: { '^/api/auth': '/api/auth' },
-    logLevel: 'warn',
+    logLevel: 'debug',
+    timeout: 30000,
+    proxyTimeout: 30000,
+    onProxyReq: (proxyReq, req, res) => {
+      console.log(`Proxying ${req.method} ${req.url} to ${userServiceUrl}${req.url}`);
+      console.log('Headers:', JSON.stringify(req.headers, null, 2));
+      
+      // Se il body è già stato parsato da express.json(), lo riconvertiamo in stringa
+      if (req.body && Object.keys(req.body).length > 0) {
+        const bodyData = JSON.stringify(req.body);
+        console.log('Body:', bodyData);
+        
+        // Aggiorna i headers per la nuova lunghezza del body
+        proxyReq.setHeader('Content-Type', 'application/json');
+        proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+        
+        // Scrivi il body nel proxy request
+        proxyReq.write(bodyData);
+      }
+    },
+    onProxyRes: (proxyRes, req, res) => {
+      console.log(`Response from ${userServiceUrl}: ${proxyRes.statusCode}`);
+    },
     onError: (err, req, res) => {
       console.error('Proxy error for auth:', err.message);
+      console.error('Error details:', err);
       if (!res.headersSent) {
         res.status(503).json({
           error: 'Service Unavailable',
@@ -70,9 +110,32 @@ export function createApiGateway() {
     target: userServiceUrl,
     changeOrigin: true,
     pathRewrite: { '^/api/users': '/api/users' },
+    timeout: 30000,
+    proxyTimeout: 30000,
     logLevel: 'warn',
+    onProxyReq: (proxyReq, req, res) => {
+      console.log(`Proxying ${req.method} ${req.url} to ${userServiceUrl}${req.url}`);
+      console.log('Headers:', JSON.stringify(req.headers, null, 2));
+      
+      // Se il body è già stato parsato da express.json(), lo riconvertiamo in stringa
+      if (req.body && Object.keys(req.body).length > 0) {
+        const bodyData = JSON.stringify(req.body);
+        console.log('Body:', bodyData);
+        
+        // Aggiorna i headers per la nuova lunghezza del body
+        proxyReq.setHeader('Content-Type', 'application/json');
+        proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+        
+        // Scrivi il body nel proxy request
+        proxyReq.write(bodyData);
+      }
+    },
+    onProxyRes: (proxyRes, req, res) => {
+      console.log(`Response from ${userServiceUrl}: ${proxyRes.statusCode}`);
+    },
     onError: (err, req, res) => {
       console.error('Proxy error for users:', err.message);
+      console.error('Error details:', err);
       if (!res.headersSent) {
         res.status(503).json({
           error: 'Service Unavailable',

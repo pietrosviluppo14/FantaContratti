@@ -51,7 +51,7 @@ const generateTokens = (user: UserPayload) => {
  */
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, username, password, first_name, last_name } = req.body;
+    const { email, username, password } = req.body;
     const pool = getPool();
 
     // Check if user already exists
@@ -70,10 +70,10 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 
     // Create new user
     const result = await pool.query(
-      `INSERT INTO users (email, username, password_hash, first_name, last_name) 
-       VALUES ($1, $2, $3, $4, $5) 
+      `INSERT INTO users (email, username, password_hash) 
+       VALUES ($1, $2, $3) 
        RETURNING id, email, username, created_at`,
-      [email, username, password_hash, first_name, last_name]
+      [email, username, password_hash]
     );
 
     const newUser = result.rows[0];
@@ -89,7 +89,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     await publishEvent('user-events', {
       type: 'USER_REGISTERED',
       userId: newUser.id,
-      data: { email, username, first_name, last_name },
+      data: { email, username },
       timestamp: new Date().toISOString()
     });
 

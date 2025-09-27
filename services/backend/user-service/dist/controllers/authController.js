@@ -22,7 +22,7 @@ const generateTokens = (user) => {
 };
 const register = async (req, res) => {
     try {
-        const { email, username, password, first_name, last_name } = req.body;
+        const { email, username, password } = req.body;
         const pool = (0, connection_1.getPool)();
         const existingUser = await pool.query('SELECT id FROM users WHERE email = $1 OR username = $2', [email, username]);
         if (existingUser.rowCount && existingUser.rowCount > 0) {
@@ -30,9 +30,9 @@ const register = async (req, res) => {
         }
         const saltRounds = 12;
         const password_hash = await bcryptjs_1.default.hash(password, saltRounds);
-        const result = await pool.query(`INSERT INTO users (email, username, password_hash, first_name, last_name) 
-       VALUES ($1, $2, $3, $4, $5) 
-       RETURNING id, email, username, created_at`, [email, username, password_hash, first_name, last_name]);
+        const result = await pool.query(`INSERT INTO users (email, username, password_hash) 
+       VALUES ($1, $2, $3) 
+       RETURNING id, email, username, created_at`, [email, username, password_hash]);
         const newUser = result.rows[0];
         const { token, refreshToken } = generateTokens({
             id: newUser.id,
@@ -42,7 +42,7 @@ const register = async (req, res) => {
         await (0, kafkaService_1.publishEvent)('user-events', {
             type: 'USER_REGISTERED',
             userId: newUser.id,
-            data: { email, username, first_name, last_name },
+            data: { email, username },
             timestamp: new Date().toISOString()
         });
         logger_1.default.info(`New user registered: ${email}`);

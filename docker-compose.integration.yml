@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Database Services
   postgres-users:
@@ -12,7 +10,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password123
     volumes:
-      - ./infrastructure/databases/users/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./infrastructure/databases/users/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./docker/init-postgres.sh:/docker-entrypoint-initdb.d/02-set-password.sh
       - postgres_users_data:/var/lib/postgresql/data
     networks:
       - fantacontratti_network
@@ -32,7 +31,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password123
     volumes:
-      - ./infrastructure/databases/contracts/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./infrastructure/databases/contracts/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./docker/init-postgres.sh:/docker-entrypoint-initdb.d/02-set-password.sh
       - postgres_contracts_data:/var/lib/postgresql/data
     networks:
       - fantacontratti_network
@@ -63,13 +63,15 @@ services:
       - fantacontratti_network
 
   kafka:
-    image: confluentinc/cp-kafka:latest
+    image: confluentinc/cp-kafka:7.4.0
     depends_on:
       - zookeeper
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: true
     networks:
@@ -77,10 +79,11 @@ services:
     volumes:
       - ./infrastructure/kafka/create-topics.sh:/opt/create-topics.sh
     healthcheck:
-      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
       interval: 30s
       timeout: 10s
       retries: 5
+      start_period: 60s
 
   # Backend Services
   user-service:
@@ -89,15 +92,16 @@ services:
       dockerfile: Dockerfile
     restart: always
     environment:
-      NODE_ENV: production
+      NODE_ENV: integration
       DB_HOST: postgres-users
       DB_PORT: 5432
       DB_NAME: fantacontratti_users
       DB_USER: postgres
       DB_PASSWORD: password123
       KAFKA_BROKERS: kafka:9092
-      JWT_SECRET: your-jwt-secret-key
-      JWT_REFRESH_SECRET: your-refresh-secret-key
+      JWT_SECRET: integration-jwt-secret-key
+      JWT_REFRESH_SECRET: integration-refresh-secret-key
+      LOG_LEVEL: info
       JWT_EXPIRES_IN: 15m
       JWT_REFRESH_EXPIRES_IN: 7d
     depends_on:
@@ -108,7 +112,7 @@ services:
     networks:
       - fantacontratti_network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      test: ["CMD", "node", "-e", "const http = require('http'); http.get('http://localhost:3001/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); }).on('error', () => { process.exit(1); });"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -132,7 +136,7 @@ services:
     networks:
       - fantacontratti_network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      test: ["CMD", "node", "-e", "const http = require('http'); http.get('http://localhost:4000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); }).on('error', () => { process.exit(1); });"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -146,7 +150,7 @@ services:
     ports:
       - "5173:80"
     environment:
-      VITE_API_BASE_URL: http://localhost:4000
+      VITE_API_BASE_URL: /api
     depends_on:
       api-gateway:
         condition: service_healthy
