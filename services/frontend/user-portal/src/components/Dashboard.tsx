@@ -44,7 +44,7 @@ const Dashboard: React.FC = () => {
       navigate('/login')
     } catch (err) {
       // Even if logout fails, remove token and redirect
-      localStorage.removeItem('auth_token')
+      localStorage.removeItem('authToken')
       navigate('/login')
     }
   }

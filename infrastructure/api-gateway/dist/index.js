@@ -33,7 +33,6 @@ const limiter = (0, express_rate_limit_1.default)({
     max: 1000,
     message: 'Too many requests from this IP, please try again later.'
 });
-app.use(limiter);
 app.use((0, compression_1.default)());
 app.use(express_1.default.json({ limit: '10mb' }));
 app.get('/health', (req, res) => {

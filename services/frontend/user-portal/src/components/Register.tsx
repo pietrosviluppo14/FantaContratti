@@ -49,7 +49,7 @@ const Register: React.FC<RegisterProps> = ({ onSuccess }) => {
       
       if (response.data.success) {
         // Store auth token
-        localStorage.setItem('auth_token', response.data.data.token)
+        localStorage.setItem('authToken', response.data.data.token)
         
         // Call success callback if provided
         if (onSuccess) {
